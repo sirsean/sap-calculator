@@ -51,24 +51,35 @@ async function getLootCardBalance(address, tokenId) {
         lootCardContract.balanceOf(address, tokenId).then(bn => bn.toNumber()),
         fetch(`https://omniscient.fringedrifters.com/card/api/${tokenId}.json`).then(r => r.json()),
     ]).then(([ balance, metadata ]) => {
-        return {
-            tokenId,
-            name: metadata.name,
-            balance,
-            sap: (LOOT_CARD_SAP[tokenId] || 0) * balance,
-        };
+        return [
+            {
+                tokenId,
+                name: metadata.name,
+                balance,
+                sap: (LOOT_CARD_SAP[tokenId] || 0) * balance,
+            },
+            {
+                tokenId,
+                name: metadata.name,
+                balance,
+                sap: (balance) > 0 ? (LOOT_CARD_SAP[tokenId] || 0) * (balance - 1) : 0,
+            },
+        ] ;
     })
 }
 
 async function allLootCardBalances(address) {
     const tokenIds = Object.keys(LOOT_CARD_SAP);
     const list = [];
+    const list2 = [];
     for (let i=0; i < tokenIds.length; i++) {
-        const row = await getLootCardBalance(address, tokenIds[i]);
+        const [row, row2]  = await getLootCardBalance(address, tokenIds[i]);
         list.push(row);
+        list2.push(row2);
     }
-    return list;
+    return [list, list2];
 }
+
 
 function drifterBonus(balance) {
     if (balance >= 100) {
@@ -104,13 +115,19 @@ async function main() {
     await Promise.all([
         allLootCardBalances(address),
         drifterBalance(address),
-    ]).then(([lootCards, { numDrifters, sap }]) => {
+    ]).then(([[lootCards, lootCards2], { numDrifters, sap }]) => {
         console.log(lootCards);
+        console.log(lootCards2);
         const lootCardSap = lootCards.map(r => r.sap).reduce((a, b) => a + b, 0);
+        const lootCardSap2 = lootCards2.map(r => r.sap).reduce((a, b) => a + b, 0);
         console.log('SAP Cans from Loot Cards:', lootCardSap);
         console.log('Drifters:', numDrifters);
         console.log('SAP Cans from Drifters:', sap);
         console.log('Total SAP Cans:', lootCardSap + sap);
+
+        console.log('SAP Cans from Loot Cards (holding back one loot card of each):', lootCardSap2);
+        console.log('Total SAP Cans (holding back one loot card of each):', lootCardSap2 + sap);
+
     });
 }
 
