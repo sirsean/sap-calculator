@@ -5,8 +5,10 @@ import * as os from 'os';
 import * as path from 'path';
 import fetch from 'node-fetch';
 import { ethers } from 'ethers';
+import DrifterABI from '../abi/DrifterABI.js';
 import LootCardABI from '../abi/LootCardABI.js';
 
+const DRIFTER_ADDRESS = '0xe3B399AAb015D2C0D787ECAd40410D88f4f4cA50';
 const LOOT_CARD_ADDRESS = '0x39F8166484486c3b72C5c58c468A016D036E1a02';
 
 const configPath = path.join(os.homedir(), '.wallet');
@@ -17,6 +19,7 @@ if (!fs.existsSync(configPath)) {
 const config = JSON.parse(fs.readFileSync(configPath));
 
 const provider = new ethers.providers.AlchemyProvider('homestead', config.mainnet_alchemy_key);
+const drifterContract = new ethers.Contract(DRIFTER_ADDRESS, DrifterABI, provider);
 const lootCardContract = new ethers.Contract(LOOT_CARD_ADDRESS, LootCardABI, provider);
 
 const LOOT_CARD_SAP = {
@@ -67,11 +70,47 @@ async function allLootCardBalances(address) {
     return list;
 }
 
+function drifterBonus(balance) {
+    if (balance >= 100) {
+        return 130;
+    } else if (balance >= 50) {
+        return 60;
+    } else if (balance >= 35) {
+        return 38;
+    } else if (balance >= 20) {
+        return 20;
+    } else if (balance >= 10) {
+        return 9;
+    } else if (balance >= 5) {
+        return 4;
+    } else if (balance >= 3) {
+        return 2;
+    } else {
+        return 0;
+    }
+}
+
+async function drifterBalance(address) {
+    const balance = await drifterContract.balanceOf(address).then(b => b.toNumber());
+    const bonus = drifterBonus(balance);
+    return {
+        numDrifters: balance,
+        sap: (balance * 5) + bonus,
+    };
+}
+
 async function main() {
     const address = process.argv.slice(2)[0];
-    await allLootCardBalances(address).then(lootCards => {
+    await Promise.all([
+        allLootCardBalances(address),
+        drifterBalance(address),
+    ]).then(([lootCards, { numDrifters, sap }]) => {
         console.log(lootCards);
-        console.log('SAP Cans from Loot Cards:', lootCards.map(r => r.sap).reduce((a, b) => a + b, 0));
+        const lootCardSap = lootCards.map(r => r.sap).reduce((a, b) => a + b, 0);
+        console.log('SAP Cans from Loot Cards:', lootCardSap);
+        console.log('Drifters:', numDrifters);
+        console.log('SAP Cans from Drifters:', sap);
+        console.log('Total SAP Cans:', lootCardSap + sap);
     });
 }
 
