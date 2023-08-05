@@ -9,6 +9,7 @@ a wallet address to examine.
 # Install
 
 ```bash
+nvm use
 npm install
 ```
 
